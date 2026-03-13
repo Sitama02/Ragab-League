@@ -89,22 +89,25 @@
     </nav>
 
     <script>
-        // رابط الداتا بيز بتاعتك
-        const API_URL = "https://script.google.com/macros/s/AKfycbwH-ghyfJ8ZsqwxjldLIOaneLadbBhy2Fq_9RDJMe8RQxREN2YEB8EHDbZiw5xCJQe-/exec";
+       const API_URL = "https://script.google.com/macros/s/AKfycbwH-ghyfJ8ZsqwxjldLIOaneLadbBhy2Fq_9RDJMe8RQxREN2YEB8EHDbZiw5xCJQe-/exec";
         
         let appData = { news: [], teams: [], matches:[] };
+        let isFetchingData = true; // 🟢 ضفنا المتغير ده عشان نعرف إحنا بنحمل ولا خلصنا
 
         lucide.createIcons();
 
         async function fetchAllData() {
+            isFetchingData = true; // بدأنا تحميل
             const content = document.getElementById('app-content');
-            content.innerHTML = `<div class="flex flex-col items-center justify-center py-20 fade-in"><i data-lucide="loader" class="w-8 h-8 text-ragab-red animate-spin mb-3"></i><p class="text-gray-500 text-sm font-bold">جاري المزامنة...</p></div>`;
+            content.innerHTML = `<div class="flex flex-col items-center justify-center py-20 fade-in"><i data-lucide="loader" class="w-8 h-8 text-ragab-red animate-spin mb-3"></i><p class="text-gray-500 text-sm font-bold">جاري المزامنة مع السيرفر...</p></div>`;
             lucide.createIcons();
 
             try {
                 const response = await fetch(API_URL);
                 if (!response.ok) throw new Error('Network error');
                 appData = await response.json(); 
+                
+                isFetchingData = false; // 🟢 خلصنا تحميل بنجاح
                 
                 const activeTab = document.querySelector('.nav-item.active').getAttribute('onclick');
                 if (activeTab.includes('news')) renderNews();
@@ -114,6 +117,7 @@
                 else if (activeTab.includes('stats')) renderStats();
                 
             } catch (error) {
+                isFetchingData = false; // خلصنا تحميل بس حصل خطأ
                 document.getElementById('app-content').innerHTML = `<div class="bg-red-50 text-red-600 p-4 rounded-xl text-center">فشل الاتصال بقاعدة البيانات.</div>`;
             }
         }
@@ -156,16 +160,11 @@
             });
         }
 
-        // --- العقل المدبر لجمع إحصائيات اللاعبين ---
         function calculatePlayersStats() {
             let stats = { goals: {}, yellow: {}, red: {} };
-
             if(!appData.matches) return { goals: [], yellow: [], red:[] };
-
             appData.matches.forEach(m => {
                 if (m.status !== 'FINISHED') return;
-
-                // دالة داخلية لتفكيك النصوص (محمد-المزرعة)
                 const processColumn = (dataString, type) => {
                     if (!dataString) return;
                     let items = dataString.split(',');
@@ -174,155 +173,76 @@
                         if (parts.length === 2) {
                             let pName = parts[0].trim();
                             let tName = parts[1].trim();
-                            let key = pName + '-' + tName; // مفتاح فريد للاعب
-
-                            if (!stats[type][key]) {
-                                stats[type][key] = { name: pName, team: tName, count: 0 };
-                            }
+                            let key = pName + '-' + tName;
+                            if (!stats[type][key]) { stats[type][key] = { name: pName, team: tName, count: 0 }; }
                             stats[type][key].count++;
                         }
                     });
                 };
-
                 processColumn(m.scorers, 'goals');
                 processColumn(m.yellowCards, 'yellow');
                 processColumn(m.redCards, 'red');
             });
-
-            // تحويل القواميس إلى مصفوفات مرتبة تنازلياً
             const sortDesc = (obj) => Object.values(obj).sort((a, b) => b.count - a.count);
-
-            return {
-                goals: sortDesc(stats.goals),
-                yellow: sortDesc(stats.yellow),
-                red: sortDesc(stats.red)
-            };
+            return { goals: sortDesc(stats.goals), yellow: sortDesc(stats.yellow), red: sortDesc(stats.red) };
         }
 
         // ==========================================
-        // دوال رسم الواجهات (UI)
+        // دوال رسم الواجهات (UI) مع إضافة حالة التحميل
         // ==========================================
 
         function renderStandings() {
             const container = document.getElementById('app-content');
-            const sortedTeams = calculateStandings();
             let html = `<div class="flex items-center gap-2 mb-4 fade-in"><div class="w-1 h-5 bg-navy-900 rounded-full"></div><h2 class="text-xl font-black text-navy-900">ترتيب الدوري العام</h2></div>`;
             
-            if(sortedTeams.length === 0) {
-                html += `<p class="text-center text-gray-500 py-10">لم يتم إضافة فرق بعد.</p>`;
+            // 🟢 التعديل هنا: لو لسه بيحمل نطلع علامة التحميل
+            if(isFetchingData) {
+                html += `<div class="text-center py-10 fade-in"><i data-lucide="loader" class="w-8 h-8 text-ragab-red mx-auto animate-spin mb-2"></i><p class="text-gray-500 text-sm">جاري جلب الترتيب...</p></div>`;
             } else {
-                let rows = sortedTeams.map((t, index) => {
-                    let rankStyle = "text-gray-500";
-                    if(index === 0) rankStyle = "text-yellow-500 font-black text-lg";
-                    else if(index === 1) rankStyle = "text-gray-400 font-bold";
-                    else if(index === 2) rankStyle = "text-orange-600 font-bold";
+                const sortedTeams = calculateStandings();
+                if(sortedTeams.length === 0) {
+                    html += `<p class="text-center text-gray-500 py-10">لم يتم إضافة فرق بعد.</p>`;
+                } else {
+                    let rows = sortedTeams.map((t, index) => {
+                        let rankStyle = "text-gray-500";
+                        if(index === 0) rankStyle = "text-yellow-500 font-black text-lg";
+                        else if(index === 1) rankStyle = "text-gray-400 font-bold";
+                        else if(index === 2) rankStyle = "text-orange-600 font-bold";
 
-                    return `
-                    <tr class="border-b border-gray-100 hover:bg-gray-50">
-                        <td class="p-3 text-right flex items-center gap-2">
-                            <span class="w-5 text-center ${rankStyle}">${index + 1}</span>
-                            <div class="w-6 h-6 rounded-full bg-white flex items-center justify-center font-bold text-[10px] text-white shadow-sm" style="background-color: ${t.color}">${t.name.charAt(0)}</div>
-                            <span class="text-xs font-bold text-navy-900 truncate">${t.name}</span>
-                        </td>
-                        <td class="p-3 text-xs text-gray-600">${t.played}</td>
-                        <td class="p-3 text-xs text-green-600 font-bold">${t.won}</td>
-                        <td class="p-3 text-xs text-gray-600">${t.drawn}</td>
-                        <td class="p-3 text-xs text-red-600">${t.lost}</td>
-                        <td class="p-3 text-xs text-gray-600" dir="ltr">${(t.gf - t.ga) > 0 ? '+' : ''}${t.gf - t.ga}</td>
-                        <td class="p-3 text-sm font-black text-navy-900 bg-gray-50">${t.pts}</td>
-                    </tr>`;
-                }).join('');
+                        return `<tr class="border-b border-gray-100 hover:bg-gray-50">
+                            <td class="p-3 text-right flex items-center gap-2"><span class="w-5 text-center ${rankStyle}">${index + 1}</span><div class="w-6 h-6 rounded-full bg-white flex items-center justify-center font-bold text-[10px] text-white shadow-sm" style="background-color: ${t.color}">${t.name.charAt(0)}</div><span class="text-xs font-bold text-navy-900 truncate">${t.name}</span></td>
+                            <td class="p-3 text-xs text-gray-600">${t.played}</td><td class="p-3 text-xs text-green-600 font-bold">${t.won}</td><td class="p-3 text-xs text-gray-600">${t.drawn}</td><td class="p-3 text-xs text-red-600">${t.lost}</td><td class="p-3 text-xs text-gray-600" dir="ltr">${(t.gf - t.ga) > 0 ? '+' : ''}${t.gf - t.ga}</td><td class="p-3 text-sm font-black text-navy-900 bg-gray-50">${t.pts}</td>
+                        </tr>`;
+                    }).join('');
 
-                html += `<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden fade-in"><div class="overflow-x-auto"><table class="w-full text-center"><thead class="bg-navy-900 text-white text-[10px] uppercase tracking-wider"><tr><th class="p-3 text-right">الفريق</th><th class="p-3">لعب</th><th class="p-3">ف</th><th class="p-3">ت</th><th class="p-3">خ</th><th class="p-3">+/-</th><th class="p-3 bg-ragab-red">نقط</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+                    html += `<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden fade-in"><div class="overflow-x-auto"><table class="w-full text-center"><thead class="bg-navy-900 text-white text-[10px] uppercase tracking-wider"><tr><th class="p-3 text-right">الفريق</th><th class="p-3">لعب</th><th class="p-3">ف</th><th class="p-3">ت</th><th class="p-3">خ</th><th class="p-3">+/-</th><th class="p-3 bg-ragab-red">نقط</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+                }
             }
             container.innerHTML = html;
+            lucide.createIcons();
         }
 
         function renderMatches() {
             const container = document.getElementById('app-content');
             let html = `<div class="flex items-center gap-2 mb-4 fade-in"><div class="w-1 h-5 bg-navy-900 rounded-full"></div><h2 class="text-xl font-black text-navy-900">جدول المباريات</h2></div>`;
             
-            if(!appData.matches || appData.matches.length === 0) {
+            // 🟢 التعديل هنا
+            if(isFetchingData) {
+                html += `<div class="text-center py-10 fade-in"><i data-lucide="loader" class="w-8 h-8 text-ragab-red mx-auto animate-spin mb-2"></i><p class="text-gray-500 text-sm">جاري جلب المباريات...</p></div>`;
+            } else if(!appData.matches || appData.matches.length === 0) {
                 html += `<div class="text-center py-10 text-gray-400 text-sm">لم يتم تسجيل مباريات بعد.</div>`;
             } else {
                 appData.matches.forEach((m, i) => {
                     const isLive = m.status === 'LIVE';
                     const isFinished = m.status === 'FINISHED';
+                    let getTeamColor = (name) => { let t = appData.teams.find(x => x.teamName === name); return t ? t.color : '#ccc'; };
 
-                    html += `
-                    <div class="bg-white rounded-xl shadow-sm border ${isLive ? 'border-red-400 shadow-red-100' : 'border-gray-100'} overflow-hidden mb-3 fade-in" style="animation-delay: ${i*0.05}s">
-                        <div class="bg-gray-50 px-3 py-1.5 flex justify-between text-[10px] text-gray-500 border-b">
-                            <span class="font-bold text-navy-800">${m.week || 'أسبوع ?'}</span>
-                            <span>${m.status === 'SCHEDULED' ? 'لم تبدأ' : isLive ? '🔴 مباشر' : 'انتهت'}</span>
-                        </div>
+                    html += `<div class="bg-white rounded-xl shadow-sm border ${isLive ? 'border-red-400 shadow-red-100' : 'border-gray-100'} overflow-hidden mb-3 fade-in" style="animation-delay: ${i*0.05}s">
+                        <div class="bg-gray-50 px-3 py-1.5 flex justify-between text-[10px] text-gray-500 border-b"><span class="font-bold text-navy-800">${m.week || 'أسبوع ?'}</span><span>${m.status === 'SCHEDULED' ? 'لم تبدأ' : isLive ? '🔴 مباشر' : 'انتهت'}</span></div>
                         <div class="p-4 flex items-center justify-between">
-                            <div class="flex flex-col items-center flex-1">
-                                <div class="w-10 h-10 rounded-full mb-1 flex items-center justify-center text-white font-bold shadow-md" style="background-color: ${getTeamColor(m.homeTeam)}">${(m.homeTeam || '?').charAt(0)}</div>
-                                <span class="text-xs font-bold text-center">${m.homeTeam}</span>
-                            </div>
-                            
-                            <div class="flex flex-col items-center w-20">
-                                ${isLive ? `<span class="text-red-600 text-xl font-black animate-pulse">${m.homeScore} - ${m.awayScore}</span>` : 
-                                 isFinished ? `<span class="text-navy-900 text-xl font-black">${m.homeScore} - ${m.awayScore}</span>` : 
-                                 `<span class="text-[10px] bg-gray-100 px-2 py-1 rounded font-bold">VS</span>`}
-                            </div>
-
-                            <div class="flex flex-col items-center flex-1">
-                                <div class="w-10 h-10 rounded-full mb-1 flex items-center justify-center text-white font-bold shadow-md" style="background-color: ${getTeamColor(m.awayTeam)}">${(m.awayTeam || '?').charAt(0)}</div>
-                                <span class="text-xs font-bold text-center">${m.awayTeam}</span>
-                            </div>
-                        </div>
-                    </div>`;
-                });
-            }
-            container.innerHTML = html;
-        }
-
-        function renderNews() {
-            const container = document.getElementById('app-content');
-            let html = `<div class="flex items-center gap-2 mb-4 fade-in"><div class="w-1 h-5 bg-navy-900 rounded-full"></div><h2 class="text-xl font-black text-navy-900">نشرة الدوري</h2></div>`;
-            if(!appData.news || appData.news.length === 0) { html += `<div class="text-center py-10 text-gray-400 text-sm">لا توجد أخبار مسجلة.</div>`; } 
-            else {
-                [...appData.news].reverse().forEach((news, index) => {
-                    let badgeColor = "bg-gray-100 text-gray-600"; let isUrgent = false;
-                    if(news.type === 'عاجل') { badgeColor = "bg-red-100 text-red-600"; isUrgent = true; }
-                    html += `
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4 relative fade-in" style="animation-delay: ${index * 0.1}s">
-                        ${isUrgent ? `<div class="h-1 bg-ragab-red w-full absolute top-0"></div>` : ''}
-                        <div class="p-4">
-                            <div class="flex justify-between items-start mb-2">
-                                <span class="${badgeColor} text-[10px] font-bold px-2 py-1 rounded">${news.type || 'خبر'}</span>
-                                <span class="text-[10px] text-gray-400 font-medium">${news.date || ''}</span>
-                            </div>
-                            <h3 class="font-bold text-navy-900 text-sm mb-1">${news.title || ''}</h3>
-                            <p class="text-xs text-gray-500 leading-relaxed mt-2">${news.content || ''}</p>
-                        </div>
-                    </div>`;
-                });
-            }
-            container.innerHTML = html;
-        }
-
-        function renderTeams() {
-            const container = document.getElementById('app-content');
-            let html = `<div class="flex items-center gap-2 mb-4 fade-in"><div class="w-1 h-5 bg-navy-900 rounded-full"></div><h2 class="text-xl font-black text-navy-900">الشركات واللاعبين</h2></div>`;
-            if(!appData.teams || appData.teams.length === 0) { html += `<div class="text-center py-10 text-gray-400 text-sm">لا توجد فرق مسجلة.</div>`; } 
-            else {
-                appData.teams.forEach((team, index) => {
-                    const playersList = team.players ? team.players.split(',') :[];
-                    html += `
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-4 fade-in" style="animation-delay: ${index * 0.05}s">
-                        <div class="bg-navy-900 px-4 py-3 flex justify-between items-center cursor-pointer" onclick="togglePlayers('team_${team.id}')">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center font-bold shadow-sm" style="color: ${team.color || '#0f172a'}">${(team.teamName || '؟').charAt(0)}</div>
-                                <h3 class="text-white font-bold text-sm">${team.teamName}</h3>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full">${playersList.length} لاعب</span>
-                            </div>
-                        </div>
-                        <div id="team_${team.id}" class="hidden bg-gray-50 p-4 border-t border-gray-200">
-                            ${playersList.length > 0 ? `<ul class="space-y-2">${playersList.map(p => `<li class="text-sm text-gray-700 font-medium"><i data-lucide="user" class="w-4 h-4 text-ragab-red inline mr-1"></i> ${p.trim()}</li>`).join('')}</ul>` : `<p class="text-xs text-gray-400 text-center">لا يوجد لاعبين</p>`}
+                            <div class="flex flex-col items-center flex-1"><div class="w-10 h-10 rounded-full mb-1 flex items-center justify-center text-white font-bold shadow-md" style="background-color: ${getTeamColor(m.homeTeam)}">${(m.homeTeam || '?').charAt(0)}</div><span class="text-xs font-bold text-center">${m.homeTeam}</span></div>
+                            <div class="flex flex-col items-center w-20">${isLive ? `<span class="text-red-600 text-xl font-black animate-pulse">${m.homeScore} - ${m.awayScore}</span>` : isFinished ? `<span class="text-navy-900 text-xl font-black">${m.homeScore} - ${m.awayScore}</span>` : `<span class="text-[10px] bg-gray-100 px-2 py-1 rounded font-bold">VS</span>`}</div>
+                            <div class="flex flex-col items-center flex-1"><div class="w-10 h-10 rounded-full mb-1 flex items-center justify-center text-white font-bold shadow-md" style="background-color: ${getTeamColor(m.awayTeam)}">${(m.awayTeam || '?').charAt(0)}</div><span class="text-xs font-bold text-center">${m.awayTeam}</span></div>
                         </div>
                     </div>`;
                 });
@@ -331,55 +251,71 @@
             lucide.createIcons();
         }
 
-        // --- رسم صفحة الإحصائيات (الجديدة) ---
+        function renderNews() {
+            const container = document.getElementById('app-content');
+            let html = `<div class="flex items-center gap-2 mb-4 fade-in"><div class="w-1 h-5 bg-navy-900 rounded-full"></div><h2 class="text-xl font-black text-navy-900">نشرة الدوري</h2></div>`;
+            
+            // 🟢 التعديل هنا
+            if(isFetchingData) {
+                html += `<div class="text-center py-10 fade-in"><i data-lucide="loader" class="w-8 h-8 text-ragab-red mx-auto animate-spin mb-2"></i><p class="text-gray-500 text-sm">جاري تحديث الأخبار...</p></div>`;
+            } else if(!appData.news || appData.news.length === 0) { 
+                html += `<div class="text-center py-10 text-gray-400 text-sm">لا توجد أخبار مسجلة.</div>`; 
+            } else {[...appData.news].reverse().forEach((news, index) => {
+                    let badgeColor = "bg-gray-100 text-gray-600"; let isUrgent = false;
+                    if(news.type === 'عاجل') { badgeColor = "bg-red-100 text-red-600"; isUrgent = true; }
+                    html += `<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4 relative fade-in" style="animation-delay: ${index * 0.1}s">${isUrgent ? `<div class="h-1 bg-ragab-red w-full absolute top-0"></div>` : ''}<div class="p-4"><div class="flex justify-between items-start mb-2"><span class="${badgeColor} text-[10px] font-bold px-2 py-1 rounded">${news.type || 'خبر'}</span><span class="text-[10px] text-gray-400 font-medium">${news.date || ''}</span></div><h3 class="font-bold text-navy-900 text-sm mb-1">${news.title || ''}</h3><p class="text-xs text-gray-500 leading-relaxed mt-2">${news.content || ''}</p></div></div>`;
+                });
+            }
+            container.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function renderTeams() {
+            const container = document.getElementById('app-content');
+            let html = `<div class="flex items-center gap-2 mb-4 fade-in"><div class="w-1 h-5 bg-navy-900 rounded-full"></div><h2 class="text-xl font-black text-navy-900">الشركات واللاعبين</h2></div>`;
+            
+            // 🟢 التعديل هنا
+            if(isFetchingData) {
+                html += `<div class="text-center py-10 fade-in"><i data-lucide="loader" class="w-8 h-8 text-ragab-red mx-auto animate-spin mb-2"></i><p class="text-gray-500 text-sm">جاري جلب القوائم...</p></div>`;
+            } else if(!appData.teams || appData.teams.length === 0) { 
+                html += `<div class="text-center py-10 text-gray-400 text-sm">لا توجد فرق مسجلة.</div>`; 
+            } else {
+                appData.teams.forEach((team, index) => {
+                    const playersList = team.players ? team.players.split(',') :[];
+                    html += `<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-4 fade-in" style="animation-delay: ${index * 0.05}s"><div class="bg-navy-900 px-4 py-3 flex justify-between items-center cursor-pointer" onclick="togglePlayers('team_${team.id}')"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-white flex items-center justify-center font-bold shadow-sm" style="color: ${team.color || '#0f172a'}">${(team.teamName || '؟').charAt(0)}</div><h3 class="text-white font-bold text-sm">${team.teamName}</h3></div><div class="flex items-center gap-2"><span class="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full">${playersList.length} لاعب</span></div></div><div id="team_${team.id}" class="hidden bg-gray-50 p-4 border-t border-gray-200">${playersList.length > 0 ? `<ul class="space-y-2">${playersList.map(p => `<li class="text-sm text-gray-700 font-medium"><i data-lucide="user" class="w-4 h-4 text-ragab-red inline mr-1"></i> ${p.trim()}</li>`).join('')}</ul>` : `<p class="text-xs text-gray-400 text-center">لا يوجد لاعبين</p>`}</div></div>`;
+                });
+            }
+            container.innerHTML = html;
+            lucide.createIcons();
+        }
+
         function renderStats() {
             const container = document.getElementById('app-content');
-            const pStats = calculatePlayersStats();
-            
             let html = `<div class="flex items-center gap-2 mb-4 fade-in"><div class="w-1 h-5 bg-navy-900 rounded-full"></div><h2 class="text-xl font-black text-navy-900">أرقام وإحصائيات</h2></div>`;
 
-            // دالة لرسم قائمة (هدافين أو كروت)
-            const buildList = (title, icon, dataArray, bgColor, textColor, countLabel) => {
-                let listHtml = `
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6 fade-in">
-                    <div class="bg-navy-900 px-4 py-3 text-white font-bold text-sm flex items-center gap-2">
-                        ${icon} <span>${title}</span>
-                    </div>
-                    <div class="divide-y divide-gray-100">`;
-                
-                if(dataArray.length === 0) {
-                    listHtml += `<div class="p-6 text-center text-gray-400 text-xs">لا توجد بيانات مسجلة حتى الآن</div>`;
-                } else {
-                    dataArray.forEach((p, i) => {
-                        listHtml += `
-                        <div class="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
-                            <div class="flex items-center gap-3">
-                                <span class="w-6 h-6 flex items-center justify-center bg-gray-100 rounded-full text-xs font-bold text-gray-500">${i+1}</span>
-                                <div>
-                                    <div class="font-bold text-sm text-navy-900">${p.name}</div>
-                                    <div class="flex items-center gap-1 mt-0.5">
-                                        <span class="w-2 h-2 rounded-full" style="background-color: ${getTeamColor(p.team)}"></span>
-                                        <span class="text-[10px] text-gray-500">${p.team}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-center justify-center ${bgColor} px-3 py-1 rounded-lg border">
-                                <span class="text-lg font-black ${textColor} leading-none">${p.count}</span>
-                                <span class="text-[8px] text-gray-500 font-bold">${countLabel}</span>
-                            </div>
-                        </div>`;
-                    });
-                }
-                listHtml += `</div></div>`;
-                return listHtml;
-            };
+            // 🟢 التعديل هنا
+            if(isFetchingData) {
+                html += `<div class="text-center py-10 fade-in"><i data-lucide="loader" class="w-8 h-8 text-ragab-red mx-auto animate-spin mb-2"></i><p class="text-gray-500 text-sm">جاري حساب الإحصائيات...</p></div>`;
+            } else {
+                const pStats = calculatePlayersStats();
+                const buildList = (title, icon, dataArray, bgColor, textColor, countLabel) => {
+                    let listHtml = `<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6 fade-in"><div class="bg-navy-900 px-4 py-3 text-white font-bold text-sm flex items-center gap-2">${icon} <span>${title}</span></div><div class="divide-y divide-gray-100">`;
+                    if(dataArray.length === 0) { listHtml += `<div class="p-6 text-center text-gray-400 text-xs">لا توجد بيانات مسجلة حتى الآن</div>`; } 
+                    else {
+                        dataArray.forEach((p, i) => {
+                            listHtml += `<div class="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors"><div class="flex items-center gap-3"><span class="w-6 h-6 flex items-center justify-center bg-gray-100 rounded-full text-xs font-bold text-gray-500">${i+1}</span><div><div class="font-bold text-sm text-navy-900">${p.name}</div><div class="flex items-center gap-1 mt-0.5"><span class="w-2 h-2 rounded-full" style="background-color: ${getTeamColor(p.team)}"></span><span class="text-[10px] text-gray-500">${p.team}</span></div></div></div><div class="flex flex-col items-center justify-center ${bgColor} px-3 py-1 rounded-lg border"><span class="text-lg font-black ${textColor} leading-none">${p.count}</span><span class="text-[8px] text-gray-500 font-bold">${countLabel}</span></div></div>`;
+                        });
+                    }
+                    listHtml += `</div></div>`;
+                    return listHtml;
+                };
 
-            // رسم الثلاث قوائم
-            html += buildList('قائمة الهدافين', '⚽', pStats.goals, 'bg-yellow-50 border-yellow-100', 'text-yellow-600', 'أهداف');
-            html += buildList('الكروت الحمراء', '🟥', pStats.red, 'bg-red-50 border-red-100', 'text-red-600', 'طرد');
-            html += buildList('الكروت الصفراء', '🟨', pStats.yellow, 'bg-orange-50 border-orange-100', 'text-orange-500', 'إنذار');
-
+                html += buildList('قائمة الهدافين', '⚽', pStats.goals, 'bg-yellow-50 border-yellow-100', 'text-yellow-600', 'أهداف');
+                html += buildList('الكروت الحمراء', '🟥', pStats.red, 'bg-red-50 border-red-100', 'text-red-600', 'طرد');
+                html += buildList('الكروت الصفراء', '🟨', pStats.yellow, 'bg-orange-50 border-orange-100', 'text-orange-500', 'إنذار');
+            }
             container.innerHTML = html;
+            lucide.createIcons();
         }
 
         window.togglePlayers = function(id) { document.getElementById(id).classList.toggle('hidden'); }
@@ -395,7 +331,7 @@
             else if(tabName === 'teams') renderTeams();
             else if(tabName === 'standings') renderStandings();
             else if(tabName === 'matches') renderMatches();
-            else if(tabName === 'stats') renderStats(); // تفعيل صفحة الإحصائيات
+            else if(tabName === 'stats') renderStats(); 
             
             lucide.createIcons();
         }
@@ -407,14 +343,6 @@
             document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
             firstTab.classList.add('active');
         }, 100);
-        // تسجيل الـ Service Worker للـ PWA
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').then(() => {
-      console.log('Service Worker Registered');
-    });
-  });
-}
     </script>
 </body>
 </html>
@@ -422,3 +350,4 @@ if ('serviceWorker' in navigator) {
     </script>
 </body>
 </html>
+
