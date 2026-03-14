@@ -54,9 +54,17 @@
                     <p class="text-[10px] text-gray-300 mt-0.5 tracking-wide">رابطة الشركات المحترفة</p>
                 </div>
             </div>
-            <button class="relative p-2 bg-navy-800 rounded-full">
-                <i data-lucide="rotate-cw" class="w-5 h-5 text-white" onclick="fetchAllData()"></i>
-            </button>
+            
+            <div class="flex items-center gap-2">
+                <!-- زرار التثبيت (مخفي برمجياً لحد ما الموبايل يوافق) -->
+                <button id="install-btn" class="hidden bg-ragab-red text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-md animate-bounce border border-red-400">
+                    تثبيت 📲
+                </button>
+
+                <button class="relative p-2 bg-navy-800 rounded-full">
+                    <i data-lucide="rotate-cw" class="w-5 h-5 text-white" onclick="fetchAllData()"></i>
+                </button>
+            </div>
         </div>
     </header>
 
@@ -375,16 +383,88 @@
 
     </script>
 <!-- كود تحويل الموقع إلى تطبيق (Service Worker) -->
+    <!-- كود تحويل الموقع إلى تطبيق (Service Worker) + زرار التثبيت -->
+   <!-- ================================================== -->
+    <!-- 1. شاشة الآيفون (Popup) اللي هتظهر للمديرين -->
+    <!-- ================================================== -->
+    <div id="ios-prompt" class="hidden fixed inset-0 bg-black/60 z-[100] flex items-end justify-center pb-10 fade-in backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-3xl w-11/12 max-w-sm text-center relative shadow-2xl">
+            <button onclick="document.getElementById('ios-prompt').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full p-1">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <div class="bg-white w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-md border border-gray-100">
+                <i data-lucide="shield-half" class="w-8 h-8 text-ragab-red"></i>
+            </div>
+            <h3 class="font-black text-navy-900 text-lg mb-2">تثبيت التطبيق على الآيفون</h3>
+            <p class="text-sm text-gray-600 mb-5 leading-relaxed">
+                لتثبيت التطبيق على هاتفك، اضغط على زر المشاركة 
+                <span class="inline-block bg-gray-100 p-1 rounded-md text-blue-500 mx-1">📤</span> 
+                أسفل الشاشة، ثم اختر:<br>
+                <strong class="text-navy-900 mt-2 block bg-gray-50 py-2 rounded-lg border border-gray-100">"إضافة إلى الصفحة الرئيسية" ➕<br><span class="text-xs text-gray-500">(Add to Home Screen)</span></strong>
+            </p>
+            <div class="text-3xl animate-bounce mt-2 text-ragab-red">👇</div>
+        </div>
+    </div>
+
+    <!-- ================================================== -->
+    <!-- 2. كود التشغيل الذكي (للأندرويد والآيفون) -->
+    <!-- ================================================== -->
     <script>
+      // تسجيل الـ Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js').then(() => {
-            console.log('تم تشغيل التطبيق بنجاح');
-          }).catch((err) => {
-            console.log('فشل تشغيل التطبيق', err);
-          });
+          navigator.serviceWorker.register('./sw.js').then(() => console.log('SW Registered'));
         });
       }
+
+      let deferredPrompt;
+      const installBtn = document.getElementById('install-btn');
+      const iosPrompt = document.getElementById('ios-prompt');
+
+      // هل الموبايل آيفون؟
+      const isIos = () => {
+        const userAgent = window.navigator.userAgent.toLowerCase();
+        return /iphone|ipad|ipod/.test(userAgent);
+      }
+      
+      // هل التطبيق متثبت بالفعل؟
+      const isInStandaloneMode = () => ('standalone' in window.navigator) && (window.navigator.standalone);
+
+      // تشغيل الزرار للآيفون
+      if (isIos() && !isInStandaloneMode()) {
+          if(installBtn) installBtn.classList.remove('hidden');
+          if(installBtn) {
+              installBtn.addEventListener('click', () => {
+                  iosPrompt.classList.remove('hidden');
+                  lucide.createIcons(); 
+              });
+          }
+      }
+
+      // تشغيل الزرار للأندرويد
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (!isIos() && !isInStandaloneMode()) {
+            if(installBtn) installBtn.classList.remove('hidden');
+        }
+      });
+
+      if(installBtn) {
+          installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+              deferredPrompt.prompt();
+              const { outcome } = await deferredPrompt.userChoice;
+              deferredPrompt = null;
+              installBtn.classList.add('hidden');
+            }
+          });
+      }
+
+      window.addEventListener('appinstalled', () => {
+        if(installBtn) installBtn.classList.add('hidden');
+        deferredPrompt = null;
+      });
     </script>
 </body>
 </html>
