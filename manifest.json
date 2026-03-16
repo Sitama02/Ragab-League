@@ -1,6 +1,6 @@
 {
-  "name": "دوري مجموعة رجب",
-  "short_name": "دوري رجب",
+  "name": "Ragab Group League",
+  "short_name": "RGL",
   "description": "التطبيق الرسمي لبطولة شركات مجموعة رجب",
   "start_url": "./index.html",
   "display": "standalone",
