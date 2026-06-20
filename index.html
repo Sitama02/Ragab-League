@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <link rel="manifest" href="manifest.json?v=2">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     
     <title>Ragab Group League</title>
-    <link rel="manifest" href="manifest.json">
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json?v=4"> <!-- كود واحد فقط لمنع التعارض مع تغيير رقم الإصدار لكسر الكاش -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="RGL"> <!-- يفرض اسم RGL على الآيفون -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="logo-192.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
@@ -56,7 +62,7 @@
             </div>
             
             <div class="flex items-center gap-2">
-                <!-- زرار التثبيت (مخفي برمجياً لحد ما الموبايل يوافق) -->
+                <!-- زرار التثبيت -->
                 <button id="install-btn" class="hidden bg-ragab-red text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-md animate-bounce border border-red-400">
                     تثبيت 📲
                 </button>
@@ -97,15 +103,13 @@
         </div>
     </nav>
 
-
-        <script>
+    <script>
         // 1. رابط قاعدة البيانات
         const API_URL = "https://script.google.com/macros/s/AKfycbwH-ghyfJ8ZsqwxjldLIOaneLadbBhy2Fq_9RDJMe8RQxREN2YEB8EHDbZiw5xCJQe-/exec";
         
         let appData = { news: [], teams: [], matches:[] };
         let isFetchingData = true;
         
-        // 🟢 المتغيرات اللي كانت ناقصة عندك (شاملة فلتر الفرق الجديد)
         let state = { 
             activeTab: 'matches', 
             matchesFilter: 'ALL', 
@@ -143,20 +147,15 @@
             }
         }
 
-        // ==========================================
-        // دوال التحكم (اللي كانت ناقصة)
-        // ==========================================
-        window.setTab = (t) => { state.activeTab = t; renderNav(); renderContent(); updateIcons(); };
-        window.setMatchFilter = (f) => { state.matchesFilter = f; renderContent(); updateIcons(); };
-        window.setTeamFilter = (t) => { state.teamFilter = t; renderContent(); updateIcons(); }; // 🟢 الدالة الجديدة
-        window.setSearch = (q) => { state.searchQuery = q; renderContent(); updateIcons(); };
-        window.toggleMatchDetails = (id) => { state.expandedMatches.has(id) ? state.expandedMatches.delete(id) : state.expandedMatches.add(id); renderContent(); updateIcons(); };
+        window.setTab = (t) => { state.activeTab = t; renderContent(); };
+        window.setMatchFilter = (f) => { state.matchesFilter = f; renderContent(); };
+        window.setTeamFilter = (t) => { state.teamFilter = t; renderContent(); };
+        window.setSearch = (q) => { state.searchQuery = q; renderContent(); };
+        window.toggleMatchDetails = (id) => { state.expandedMatches.has(id) ? state.expandedMatches.delete(id) : state.expandedMatches.add(id); renderContent(); };
         window.togglePlayers = function(id) { document.getElementById(id).classList.toggle('hidden'); }
         
         window.switchTab = function(tabName, element) {
-            // 🟢 السطر ده بيرجع الشاشة لفوق بنعومة لما تغير الصفحة
             window.scrollTo({ top: 0, behavior: 'smooth' });
-
             document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
             element.classList.add('active');
             
@@ -172,9 +171,6 @@
             lucide.createIcons();
         }
 
-        // ==========================================
-        // الدوال المساعدة
-        // ==========================================
         function renderTeamBadge(teamName, sizeClass = "w-8 h-8", fontSize = "text-sm") {
             if(!appData.teams) return `<div class="${sizeClass} rounded-full bg-gray-200 flex items-center justify-center">؟</div>`;
             const t = appData.teams.find(x => x.teamName === teamName);
@@ -249,10 +245,6 @@
             return { goals: sortDesc(stats.goals), yellow: sortDesc(stats.yellow), red: sortDesc(stats.red) };
         }
 
-        // ==========================================
-        // دوال الواجهة (UI)
-        // ==========================================
-
         function renderMatches() {
             const container = document.getElementById('app-content');
             let html = `<div class="flex items-center gap-2 mb-4 fade-in"><div class="w-1 h-5 bg-navy-900 rounded-full"></div><h2 class="text-xl font-black text-navy-900">جدول المباريات</h2></div>`;
@@ -270,7 +262,6 @@
                 return;
             }
 
-            // 1. تجهيز قائمة الفرق للفلتر
             let teamOptions = `<option value="ALL">جميع الفرق</option>`;
             if(appData.teams) {
                 appData.teams.forEach(t => {
@@ -278,7 +269,6 @@
                 });
             }
 
-            // 2. الفلاتر
             const filters =[
                 { id: 'ALL', label: 'الكل' },
                 { id: 'UPCOMING', label: 'مباريات قادمة' },
@@ -289,7 +279,6 @@
                 ${filters.map(f => `<button onclick="window.setMatchFilter('${f.id}')" class="px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-300 ${state.matchesFilter === f.id ? 'bg-navy-900 text-white shadow-md ring-2 ring-offset-1 ring-navy-900' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'}">${f.label}</button>`).join('')}
             </div>`;
 
-            // 3. فلترة المباريات
             let list = appData.matches.filter(m => {
                 if (state.searchQuery && !m.homeTeam.includes(state.searchQuery) && !m.awayTeam.includes(state.searchQuery)) return false;
                 if (state.matchesFilter === 'FINISHED' && m.status !== 'FINISHED') return false;
@@ -298,7 +287,6 @@
                 return true;
             });
 
-            // الترتيب الذكي
             list.sort((a, b) => {
                 const getWeight = (status) => {
                     if (status === 'LIVE') return 1;
@@ -309,24 +297,17 @@
                 return getWeight(a.status) - getWeight(b.status);
             });
 
-           
-           // 🟢 التعديل هنا: شريط ثابت (Sticky) يضم قائمة الفرق وزراير الفلاتر فقط
             html += `
                 <div class="sticky top-[60px] z-40 bg-[#f8fafc] pt-3 pb-2 -mx-4 px-4 shadow-[0_4px_10px_rgba(0,0,0,0.04)] border-b border-gray-200 mb-4 transition-all">
-                    
-                    <!-- قائمة الفرق -->
                     <div class="mb-3">
                         <select onchange="window.setTeamFilter(this.value)" class="w-full bg-white border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:outline-none focus:border-navy-900 text-navy-900 font-bold shadow-sm appearance-none text-center">
                             ${teamOptions}
                         </select>
                     </div>
-                    
-                    <!-- زراير القادمة والمنتهية -->
                     ${filterHtml}
                 </div>
             `;
 
-            // 4. رسم كروت المباريات
             if (list.length > 0) {
                 html += `<div class="pb-4">` + list.map((m, i) => {
                     const isLive = m.status === 'LIVE';
@@ -353,32 +334,26 @@
 
                     return `
                     <div class="bg-white rounded-xl shadow-sm border ${isLive ? 'border-red-400 shadow-red-100' : 'border-gray-100'} overflow-hidden mb-4 fade-in cursor-pointer" style="animation-delay: ${Math.min(i*0.05, 0.5)}s" onclick="window.toggleMatchDetails('${m.id}')">
-                        
                         <div class="bg-gray-50 px-3 py-2 flex justify-between items-center text-[10px] text-gray-500 border-b">
                             <span class="font-bold text-navy-800 bg-gray-200 px-2 py-0.5 rounded">الأسبوع: ${m.week || '?'}</span>
-                            
                             <div class="flex items-center gap-3 font-bold text-gray-600">
                                 ${m.date ? `<span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3 text-gold-500"></i> ${m.date}</span>` : ''}
                                 ${m.time ? `<span class="flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3 text-gold-500"></i> ${m.time}</span>` : ''}
                             </div>
-
                             <span class="${isLive ? 'text-red-600 font-bold animate-pulse' : isFinished ? 'text-gray-400 font-bold' : 'text-blue-600 font-bold'}">
                                 ${m.status === 'SCHEDULED' ? 'لم تبدأ' : isLive ? '🔴 مباشر' : 'انتهت'}
                             </span>
                         </div>
-
                         <div class="p-4 flex items-center justify-between">
                             <div class="flex flex-col items-center flex-1">
                                 <div class="mb-1">${renderTeamBadge(m.homeTeam, 'w-12 h-12', 'text-xl')}</div>
                                 <span class="text-xs font-bold text-center text-navy-900">${m.homeTeam}</span>
                             </div>
-                            
                             <div class="flex flex-col items-center w-24">
                                 ${isLive ? `<span class="text-red-600 text-3xl font-black animate-pulse drop-shadow-sm">${m.homeScore} - ${m.awayScore}</span>` : 
                                  isFinished ? `<span class="text-navy-900 text-3xl font-black drop-shadow-sm">${m.homeScore} - ${m.awayScore}</span>` : 
                                  `<span class="text-xs bg-gray-100 px-4 py-1.5 rounded-full font-bold text-gray-400 border border-gray-200">VS</span>`}
                             </div>
-
                             <div class="flex flex-col items-center flex-1">
                                 <div class="mb-1">${renderTeamBadge(m.awayTeam, 'w-12 h-12', 'text-xl')}</div>
                                 <span class="text-xs font-bold text-center text-navy-900">${m.awayTeam}</span>
@@ -499,17 +474,12 @@
             c.className = "p-4 max-w-lg mx-auto";
             if (state.activeTab === 'matches') renderMatches();
             else if (state.activeTab === 'standings') renderStandings();
-            else if (state.activeTab === 'scorers') renderScorers();
             else if (state.activeTab === 'news') renderNews();
             else if (state.activeTab === 'teams') renderTeams();
             else if (state.activeTab === 'stats') renderStats();
+            lucide.createIcons();
         }
 
-        function renderNav() {
-            // function stub for completeness if needed elsewhere, icons are handled in switchTab
-        }
-
-        // تشغيل التحميل
         fetchAllData();
 
         setTimeout(() => {
@@ -520,11 +490,6 @@
 
     </script>
 
-<!-- كود تحويل الموقع إلى تطبيق (Service Worker) -->
-    <!-- كود تحويل الموقع إلى تطبيق (Service Worker) + زرار التثبيت -->
-   <!-- ================================================== -->
-    <!-- 1. شاشة الآيفون (Popup) اللي هتظهر للمديرين -->
-    <!-- ================================================== -->
     <div id="ios-prompt" class="hidden fixed inset-0 bg-black/60 z-[100] flex items-end justify-center pb-10 fade-in backdrop-blur-sm">
         <div class="bg-white p-6 rounded-3xl w-11/12 max-w-sm text-center relative shadow-2xl">
             <button onclick="document.getElementById('ios-prompt').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full p-1">
@@ -544,11 +509,7 @@
         </div>
     </div>
 
-    <!-- ================================================== -->
-    <!-- 2. كود التشغيل الذكي (للأندرويد والآيفون) -->
-    <!-- ================================================== -->
     <script>
-      // تسجيل الـ Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./sw.js').then(() => console.log('SW Registered'));
@@ -559,16 +520,13 @@
       const installBtn = document.getElementById('install-btn');
       const iosPrompt = document.getElementById('ios-prompt');
 
-      // هل الموبايل آيفون؟
       const isIos = () => {
         const userAgent = window.navigator.userAgent.toLowerCase();
         return /iphone|ipad|ipod/.test(userAgent);
       }
       
-      // هل التطبيق متثبت بالفعل؟
       const isInStandaloneMode = () => ('standalone' in window.navigator) && (window.navigator.standalone);
 
-      // تشغيل الزرار للآيفون
       if (isIos() && !isInStandaloneMode()) {
           if(installBtn) installBtn.classList.remove('hidden');
           if(installBtn) {
@@ -579,7 +537,6 @@
           }
       }
 
-      // تشغيل الزرار للأندرويد
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
